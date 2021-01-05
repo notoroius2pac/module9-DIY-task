@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:wsc="http://www.mulesoft.org/schema/mule/wsc" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/wsc http://www.mulesoft.org/schema/mule/wsc/current/mule-wsc.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	
+	
+		<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="e876f2c2-d087-4bb9-a084-ab2509caf622" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="40ca3736-da4f-443b-871a-616fcc22c9f0" file="configuration.yaml" />
+		<http:request-config name="HTTP_Request_Accounts_API" doc:name="HTTP Request configuration" doc:id="90dc47b7-b997-4d9d-98e6-7daa066484ad" basePath="${accounts.base}" responseTimeout="15000">
+		<http:request-connection host="${accounts.host}" port="${accounts.port}" >
+		</http:request-connection>
+	</http:request-config>
+	<wsc:config name="Web_Service_Consumer_Config" doc:name="Web Service Consumer Config" doc:id="9855259c-2d45-4535-b310-8f0a07dd77f6" >
+		<wsc:connection wsdlLocation="${flights.wsdl}" service="${flights.service}" port="${flights.port}" address="${flights.address}"/>
+	</wsc:config>
+	<sub-flow name="choiceFlow" doc:id="41b95206-6720-4fbb-a400-a60bfc1a7870" >
+		<choice doc:name="Choice" doc:id="ba470ee4-101f-4985-bc76-fc9b426baa51">
+			<when expression='#[isEmpty(payload["0"].payload)]'>
+				<set-payload value="accounts is empty" doc:name="accounts is empty" doc:id="b7c2fc98-33a5-477b-8b43-13c45aa4163b" />
+			</when>
+			<when expression="#[payload['1'].payload.listAllFlightsResponse == null]">
+				<set-payload value="flights is empty" doc:name="flights is empty" doc:id="cfbe6715-1e2e-4a00-89e1-0f66d1a53768" />
+			</when>
+			<when expression="#[not (isEmpty(payload[&quot;0&quot;].payload) or payload['1'].payload.listAllFlightsResponse == null)]">
+				<ee:transform doc:name="Transform Message" doc:id="99ac7d76-f5c4-4825-a26b-37d21b4bcdae" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	accounts: {
+		attributes:payload['0'].attributes default 'accounts attributes',
+		payload: payload['0'].payload default 'accounts attributes'
+	},
+
+	flights: {
+		attributes:payload['1'].attributes default 'flights attributes',
+		payload:payload['1'].payload.body default 'flights attributes'
+	}
+}
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<set-payload value='"Payload returned from both accounts and flights are emplty"' doc:name="both empty" doc:id="8d153d91-6d2c-4680-9890-96f6a7ab555b" />
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<flow name="mainFlow" doc:id="fa04f733-b10c-4008-9572-bb7e119b88e7" >
+		<http:listener doc:name="Listener" doc:id="f7b33ffe-8853-46df-b6e4-ae5b39c5468d" config-ref="HTTP_Listener_config" path="/flights_accounts" allowedMethods="GET"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="bb76b427-94df-444e-bec2-dd0a9fa28092" >
+			<route >
+				<flow-ref doc:name="accounts" doc:id="1d4c6f9e-b0c6-4183-b06c-ef38a079d221" name="accounts"/>
+			</route>
+			<route >
+				<flow-ref doc:name="flights" doc:id="be10af20-b924-41d0-803d-a4736aaa4f7b" name="flights"/>
+			</route>
+		</scatter-gather>
+		<flow-ref doc:name="choiceFlow" doc:id="ecdfc942-52a1-4a0f-a02b-922315afa4e1" name="choiceFlow" />
+	</flow>
+	
+	
+	
+	
+	
+</mule>
